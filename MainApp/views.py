@@ -10,6 +10,8 @@ from django.views.decorators.http import require_POST
 import os
 from django.contrib import messages
 from django.shortcuts import get_object_or_404
+from .models import FileOperation
+
 # Create your views here.
 
 @login_required
@@ -146,3 +148,74 @@ def delete_project(request, project_id):
     
     messages.success(request, f'Project "{project.name}" has been deleted.')
     return redirect('dashboard')
+
+@login_required
+@require_POST
+def create_file_or_folder(request, project_id):
+    project = get_object_or_404(Project, id=project_id, user=request.user)
+    data = json.loads(request.body)
+    path = data.get('path')
+    name = data.get('name')
+    is_folder = data.get('is_folder', False)
+    
+    full_path = os.path.join(project.root_path, path, name)
+    
+    if is_folder:
+        os.makedirs(full_path, exist_ok=True)
+    else:
+        open(full_path, 'a').close()
+    
+    FileOperation.objects.create(project=project, operation_type='create', source_path=os.path.join(path, name))
+    return JsonResponse({'success': True})
+
+@login_required
+@require_POST
+def move_file_or_folder(request, project_id):
+    project = get_object_or_404(Project, id=project_id, user=request.user)
+    data = json.loads(request.body)
+    source = data.get('source')
+    destination = data.get('destination')
+    
+    source_path = os.path.join(project.root_path, source)
+    destination_path = os.path.join(project.root_path, destination)
+    
+    shutil.move(source_path, destination_path)
+    
+    FileOperation.objects.create(project=project, operation_type='move', source_path=source, destination_path=destination)
+    return JsonResponse({'success': True})
+
+@login_required
+@require_POST
+def copy_file_or_folder(request, project_id):
+    project = get_object_or_404(Project, id=project_id, user=request.user)
+    data = json.loads(request.body)
+    source = data.get('source')
+    destination = data.get('destination')
+    
+    source_path = os.path.join(project.root_path, source)
+    destination_path = os.path.join(project.root_path, destination)
+    
+    if os.path.isdir(source_path):
+        shutil.copytree(source_path, destination_path)
+    else:
+        shutil.copy2(source_path, destination_path)
+    
+    FileOperation.objects.create(project=project, operation_type='copy', source_path=source, destination_path=destination)
+    return JsonResponse({'success': True})
+
+@login_required
+@require_POST
+def delete_file_or_folder(request, project_id):
+    project = get_object_or_404(Project, id=project_id, user=request.user)
+    data = json.loads(request.body)
+    path = data.get('path')
+    
+    full_path = os.path.join(project.root_path, path)
+    
+    if os.path.isdir(full_path):
+        shutil.rmtree(full_path)
+    else:
+        os.remove(full_path)
+    
+    FileOperation.objects.create(project=project, operation_type='delete', source_path=path)
+    return JsonResponse({'success': True})

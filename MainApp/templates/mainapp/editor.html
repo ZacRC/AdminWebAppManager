@@ -11,6 +11,11 @@
         .dropdown:hover .dropdown-menu {
             display: block;
         }
+        .context-menu {
+            display: none;
+            position: absolute;
+            z-index: 1000;
+        }
     </style>
 </head>
 <body class="h-full flex flex-col">
@@ -22,6 +27,8 @@
             </button>
             <ul class="dropdown-menu absolute hidden text-gray-700 pt-1 bg-white rounded-md shadow-lg">
                 <li><a class="rounded-t hover:bg-gray-200 py-2 px-4 block whitespace-no-wrap" href="#" onclick="saveFile()">Save</a></li>
+                <li><a class="hover:bg-gray-200 py-2 px-4 block whitespace-no-wrap" href="#" onclick="createNewFile()">New File</a></li>
+                <li><a class="hover:bg-gray-200 py-2 px-4 block whitespace-no-wrap" href="#" onclick="createNewFolder()">New Folder</a></li>
                 <li><a class="rounded-b hover:bg-gray-200 py-2 px-4 block whitespace-no-wrap" href="{% url 'dashboard' %}">Back to Dashboard</a></li>
             </ul>
         </div>
@@ -42,10 +49,118 @@
         </div>
     </main>
 
+    <div id="context-menu" class="context-menu bg-white rounded-md shadow-lg">
+        <ul class="py-1">
+            <li><a href="#" class="block px-4 py-2 text-gray-800 hover:bg-gray-200" onclick="copySelected()">Copy</a></li>
+            <li><a href="#" class="block px-4 py-2 text-gray-800 hover:bg-gray-200" onclick="cutSelected()">Cut</a></li>
+            <li><a href="#" class="block px-4 py-2 text-gray-800 hover:bg-gray-200" onclick="pasteHere()">Paste</a></li>
+            <li><a href="#" class="block px-4 py-2 text-gray-800 hover:bg-gray-200" onclick="deleteSelected()">Delete</a></li>
+        </ul>
+    </div>
+
     <script>
         const fileTree = {{ file_tree_json|safe }};
         const projectId = {{ project.id }};
         let currentFilePath = '';
+
+        let clipboard = null;
+        let clipboardOperation = null;
+
+        function showContextMenu(e, path) {
+            e.preventDefault();
+            const contextMenu = document.getElementById('context-menu');
+            contextMenu.style.display = 'block';
+            contextMenu.style.left = `${e.pageX}px`;
+            contextMenu.style.top = `${e.pageY}px`;
+            contextMenu.dataset.path = path;
+        }
+
+        document.addEventListener('click', function(e) {
+            const contextMenu = document.getElementById('context-menu');
+            if (e.target.closest('#context-menu') === null) {
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        function createNewFile() {
+            const name = prompt('Enter file name:');
+            if (name) {
+                createFileOrFolder(name, false);
+            }
+        }
+
+        function createNewFolder() {
+            const name = prompt('Enter folder name:');
+            if (name) {
+                createFileOrFolder(name, true);
+            }
+        }
+
+        async function createFileOrFolder(name, isFolder) {
+            const response = await fetch(`/app/create_file_or_folder/${projectId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ path: '', name: name, is_folder: isFolder })
+            });
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Error creating file/folder');
+            }
+        }
+
+        function copySelected() {
+            clipboard = document.getElementById('context-menu').dataset.path;
+            clipboardOperation = 'copy';
+        }
+
+        function cutSelected() {
+            clipboard = document.getElementById('context-menu').dataset.path;
+            clipboardOperation = 'cut';
+        }
+
+        async function pasteHere() {
+            if (!clipboard) return;
+            const destination = document.getElementById('context-menu').dataset.path;
+            const operation = clipboardOperation === 'cut' ? 'move' : 'copy';
+            const response = await fetch(`/app/${operation}_file_or_folder/${projectId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ source: clipboard, destination: destination })
+            });
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert(`Error ${operation}ing file/folder`);
+            }
+            clipboard = null;
+            clipboardOperation = null;
+        }
+
+        async function deleteSelected() {
+            const path = document.getElementById('context-menu').dataset.path;
+            if (confirm(`Are you sure you want to delete ${path}?`)) {
+                const response = await fetch(`/app/delete_file_or_folder/${projectId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ path: path })
+                });
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Error deleting file/folder');
+                }
+            }
+        }
 
         function renderFileTree(tree, parentElement) {
             const ul = document.createElement('ul');
@@ -59,6 +174,7 @@
                         <span>${item.name}</span>
                     </div>
                 `;
+                li.querySelector('div').addEventListener('contextmenu', (e) => showContextMenu(e, item.path));
                 if (item.type === 'directory') {
                     const childrenUl = document.createElement('ul');
                     childrenUl.className = 'hidden pl-4';
