@@ -1,56 +1,76 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-gray-100">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Editor - {{ project.name }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.30.1/min/vs/loader.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <nav class="bg-blue-600 text-white p-4">
+<body class="h-full flex flex-col">
+    <nav class="bg-indigo-600 text-white p-4 shadow-md">
         <div class="container mx-auto flex justify-between items-center">
-            <a href="/" class="text-2xl font-bold">MyProject</a>
+            <a href="/" class="text-2xl font-bold flex items-center">
+                <i class="fas fa-code mr-2"></i>
+                MyProject
+            </a>
             <ul class="flex space-x-4">
-                <li><a href="{% url 'dashboard' %}" class="hover:underline">Dashboard</a></li>
-                <li><a href="{% url 'logout' %}" class="hover:underline">Logout</a></li>
+                <li><a href="{% url 'dashboard' %}" class="hover:text-indigo-200 transition duration-150 ease-in-out"><i class="fas fa-tachometer-alt mr-1"></i> Dashboard</a></li>
+                <li><a href="{% url 'logout' %}" class="hover:text-indigo-200 transition duration-150 ease-in-out"><i class="fas fa-sign-out-alt mr-1"></i> Logout</a></li>
             </ul>
         </div>
     </nav>
-    <main class="container mx-auto mt-8 p-4">
-        <h1 class="text-3xl font-bold mb-6">{{ project.name }} - Editor</h1>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div class="md:col-span-1 bg-white shadow-md rounded-lg p-4">
-                <h2 class="text-xl font-semibold mb-4">File Tree</h2>
-                <div id="file-tree" class="text-sm"></div>
+    <main class="flex-grow flex overflow-hidden">
+        <div class="w-1/4 bg-white shadow-md overflow-y-auto">
+            <div class="p-4 border-b">
+                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                    <i class="fas fa-folder-open mr-2 text-indigo-600"></i>
+                    File Explorer
+                </h2>
             </div>
-            <div class="md:col-span-3">
-                <div id="editor" class="w-full h-[600px] bg-white shadow-md rounded-lg"></div>
+            <div id="file-tree" class="text-sm p-2"></div>
+        </div>
+        <div class="w-3/4 flex flex-col">
+            <div class="bg-gray-800 text-white p-2 flex justify-between items-center">
+                <span id="current-file" class="text-sm font-mono"></span>
+                <button onclick="saveFile()" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition duration-150 ease-in-out">
+                    <i class="fas fa-save mr-1"></i> Save
+                </button>
             </div>
+            <div id="editor" class="flex-grow"></div>
         </div>
     </main>
+
     <script>
         const fileTree = {{ file_tree_json|safe }};
         const projectId = {{ project.id }};
-        console.log("Received file tree:", fileTree);  // Debug log
+        let currentFilePath = '';
 
         function renderFileTree(tree, parentElement) {
             const ul = document.createElement('ul');
             ul.className = 'pl-4';
             tree.forEach(item => {
                 const li = document.createElement('li');
+                const icon = item.type === 'directory' ? 'fa-folder' : 'fa-file-code';
+                li.innerHTML = `
+                    <div class="flex items-center py-1 px-2 hover:bg-gray-100 rounded cursor-pointer">
+                        <i class="fas ${icon} mr-2 text-indigo-600"></i>
+                        <span>${item.name}</span>
+                    </div>
+                `;
                 if (item.type === 'directory') {
-                    li.innerHTML = `<span class="cursor-pointer hover:text-blue-600">${item.name}</span>`;
                     const childrenUl = document.createElement('ul');
                     childrenUl.className = 'hidden pl-4';
                     renderFileTree(item.children, childrenUl);
                     li.appendChild(childrenUl);
-                    li.querySelector('span').addEventListener('click', () => {
+                    li.querySelector('div').addEventListener('click', (e) => {
+                        e.stopPropagation();
                         childrenUl.classList.toggle('hidden');
+                        li.querySelector('i').classList.toggle('fa-folder-open');
                     });
                 } else {
-                    li.innerHTML = `<span class="cursor-pointer hover:text-blue-600" data-path="${item.path}">${item.name}</span>`;
-                    li.querySelector('span').addEventListener('click', () => loadFile(item.path));
+                    li.querySelector('div').addEventListener('click', () => loadFile(item.path));
                 }
                 ul.appendChild(li);
             });
@@ -59,7 +79,6 @@
 
         renderFileTree(fileTree, document.getElementById('file-tree'));
 
-        // Set up Monaco Editor
         require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.30.1/min/vs' } });
         require(['vs/editor/editor.main'], function () {
             window.editor = monaco.editor.create(document.getElementById('editor'), {
@@ -78,22 +97,37 @@
                 const language = getLanguageFromExtension(fileExtension);
                 window.editor.setValue(data.content);
                 monaco.editor.setModelLanguage(window.editor.getModel(), language);
+                currentFilePath = path;
+                document.getElementById('current-file').textContent = path;
             } else {
                 console.error('Error loading file:', data.error);
             }
         }
 
         async function saveFile() {
-            const activePath = document.querySelector('#file-tree .active').dataset.path;
+            if (!currentFilePath) {
+                alert('No file is currently open');
+                return;
+            }
             const content = window.editor.getValue();
-            await fetch(`/app/save_file/${projectId}/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({ path: activePath, content: content })
-            });
+            try {
+                const response = await fetch(`/app/save_file/${projectId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ path: currentFilePath, content: content })
+                });
+                if (response.ok) {
+                    alert('File saved successfully');
+                } else {
+                    alert('Error saving file');
+                }
+            } catch (error) {
+                console.error('Error saving file:', error);
+                alert('Error saving file');
+            }
         }
 
         function getLanguageFromExtension(extension) {
