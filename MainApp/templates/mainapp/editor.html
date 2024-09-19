@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor - {{ project.name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.30.1/min/vs/loader.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-blue-600 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <a href="/" class="text-2xl font-bold">MyProject</a>
+            <ul class="flex space-x-4">
+                <li><a href="{% url 'dashboard' %}" class="hover:underline">Dashboard</a></li>
+                <li><a href="{% url 'logout' %}" class="hover:underline">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+    <main class="container mx-auto mt-8 p-4">
+        <h1 class="text-3xl font-bold mb-6">{{ project.name }} - Editor</h1>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div class="md:col-span-1 bg-white shadow-md rounded-lg p-4">
+                <h2 class="text-xl font-semibold mb-4">File Tree</h2>
+                <div id="file-tree" class="text-sm"></div>
+            </div>
+            <div class="md:col-span-3">
+                <div id="editor" class="w-full h-[600px] bg-white shadow-md rounded-lg"></div>
+            </div>
+        </div>
+    </main>
+    <script>
+        const fileTree = {{ file_tree_json|safe }};
+        const projectId = {{ project.id }};
+        console.log("Received file tree:", fileTree);  // Debug log
+
+        function renderFileTree(tree, parentElement) {
+            const ul = document.createElement('ul');
+            ul.className = 'pl-4';
+            tree.forEach(item => {
+                const li = document.createElement('li');
+                if (item.type === 'directory') {
+                    li.innerHTML = `<span class="cursor-pointer hover:text-blue-600">${item.name}</span>`;
+                    const childrenUl = document.createElement('ul');
+                    childrenUl.className = 'hidden pl-4';
+                    renderFileTree(item.children, childrenUl);
+                    li.appendChild(childrenUl);
+                    li.querySelector('span').addEventListener('click', () => {
+                        childrenUl.classList.toggle('hidden');
+                    });
+                } else {
+                    li.innerHTML = `<span class="cursor-pointer hover:text-blue-600" data-path="${item.path}">${item.name}</span>`;
+                    li.querySelector('span').addEventListener('click', () => loadFile(item.path));
+                }
+                ul.appendChild(li);
+            });
+            parentElement.appendChild(ul);
+        }
+
+        renderFileTree(fileTree, document.getElementById('file-tree'));
+
+        // Set up Monaco Editor
+        require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.30.1/min/vs' } });
+        require(['vs/editor/editor.main'], function () {
+            window.editor = monaco.editor.create(document.getElementById('editor'), {
+                value: '// Select a file to edit',
+                language: 'plaintext',
+                theme: 'vs-dark',
+                automaticLayout: true
+            });
+        });
+
+        async function loadFile(path) {
+            const response = await fetch(`/app/load_file/${projectId}/?path=${encodeURIComponent(path)}`);
+            const data = await response.json();
+            if (data.content) {
+                const fileExtension = path.split('.').pop();
+                const language = getLanguageFromExtension(fileExtension);
+                window.editor.setValue(data.content);
+                monaco.editor.setModelLanguage(window.editor.getModel(), language);
+            } else {
+                console.error('Error loading file:', data.error);
+            }
+        }
+
+        async function saveFile() {
+            const activePath = document.querySelector('#file-tree .active').dataset.path;
+            const content = window.editor.getValue();
+            await fetch(`/app/save_file/${projectId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ path: activePath, content: content })
+            });
+        }
+
+        function getLanguageFromExtension(extension) {
+            const languageMap = {
+                'js': 'javascript',
+                'py': 'python',
+                'html': 'html',
+                'css': 'css',
+                'json': 'json',
+                'md': 'markdown'
+            };
+            return languageMap[extension] || 'plaintext';
+        }
+    </script>
+</body>
+</html>
