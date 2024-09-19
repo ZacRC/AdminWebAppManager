@@ -40,7 +40,14 @@ def upload_project(request):
         shutil.unpack_archive(project_path, extract_path)
         os.remove(project_path)  # Remove the zip file after extraction
         
-        print(f"Extracted files: {os.listdir(extract_path)}")  # Debug print
+        # Clean up unwanted files and directories
+        for root, dirs, files in os.walk(extract_path, topdown=True):
+            dirs[:] = [d for d in dirs if not should_ignore(d)]
+            for file in files:
+                if should_ignore(file):
+                    os.remove(os.path.join(root, file))
+        
+        print(f"Cleaned extracted files: {os.listdir(extract_path)}")  # Debug print
         
         project = Project.objects.create(user=request.user, name=os.path.splitext(project_name)[0], root_path=extract_path)
         print(f"Created project: {project.name} with root path: {project.root_path}")  # Debug print
@@ -58,10 +65,17 @@ def editor(request, project_id):
         'file_tree_json': json.dumps(file_tree)
     })
 
+def should_ignore(name):
+    ignore_list = ['.DS_Store', '__MACOSX']
+    return name in ignore_list or name.startswith('.')
+
 def generate_file_tree(root_path):
     print(f"Generating file tree for: {root_path}")  # Debug print
     file_tree = []
     for root, dirs, files in os.walk(root_path):
+        # Remove ignored directories
+        dirs[:] = [d for d in dirs if not should_ignore(d)]
+        
         print(f"Current directory: {root}")  # Debug print
         print(f"Subdirectories: {dirs}")  # Debug print
         print(f"Files: {files}")  # Debug print
@@ -78,7 +92,8 @@ def generate_file_tree(root_path):
                 else:
                     current_level = existing_dir['children']
         for file in files:
-            current_level.append({'name': file, 'type': 'file', 'path': os.path.join(relative_path, file)})
+            if not should_ignore(file):
+                current_level.append({'name': file, 'type': 'file', 'path': os.path.join(relative_path, file)})
     print(f"Final file tree: {file_tree}")  # Debug print
     return file_tree
 
