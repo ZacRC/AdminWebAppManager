@@ -7,37 +7,37 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.30.1/min/vs/loader.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        .dropdown:hover .dropdown-menu {
+            display: block;
+        }
+    </style>
 </head>
 <body class="h-full flex flex-col">
-    <nav class="bg-indigo-600 text-white p-4 shadow-md">
-        <div class="container mx-auto flex justify-between items-center">
-            <a href="/" class="text-2xl font-bold flex items-center">
-                <i class="fas fa-code mr-2"></i>
-                MyProject
-            </a>
-            <ul class="flex space-x-4">
-                <li><a href="{% url 'dashboard' %}" class="hover:text-indigo-200 transition duration-150 ease-in-out"><i class="fas fa-tachometer-alt mr-1"></i> Dashboard</a></li>
-                <li><a href="{% url 'logout' %}" class="hover:text-indigo-200 transition duration-150 ease-in-out"><i class="fas fa-sign-out-alt mr-1"></i> Logout</a></li>
+    <div class="bg-gray-800 text-white p-2 flex items-center">
+        <div class="dropdown inline-block relative">
+            <button class="font-semibold py-2 px-4 rounded inline-flex items-center">
+                <span class="mr-1">General</span>
+                <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/> </svg>
+            </button>
+            <ul class="dropdown-menu absolute hidden text-gray-700 pt-1 bg-white rounded-md shadow-lg">
+                <li><a class="rounded-t hover:bg-gray-200 py-2 px-4 block whitespace-no-wrap" href="#" onclick="saveFile()">Save</a></li>
+                <li><a class="rounded-b hover:bg-gray-200 py-2 px-4 block whitespace-no-wrap" href="{% url 'dashboard' %}">Back to Dashboard</a></li>
             </ul>
         </div>
-    </nav>
+        <span id="current-file" class="text-sm font-mono ml-4"></span>
+    </div>
     <main class="flex-grow flex overflow-hidden">
-        <div class="w-1/4 bg-white shadow-md overflow-y-auto">
-            <div class="p-4 border-b">
-                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
-                    <i class="fas fa-folder-open mr-2 text-indigo-600"></i>
+        <div class="w-1/4 bg-gray-700 shadow-md overflow-y-auto">
+            <div class="p-4 border-b border-gray-600">
+                <h2 class="text-xl font-semibold text-white flex items-center">
+                    <i class="fas fa-folder-open mr-2 text-blue-400"></i>
                     File Explorer
                 </h2>
             </div>
-            <div id="file-tree" class="text-sm p-2"></div>
+            <div id="file-tree" class="text-sm p-2 text-gray-300"></div>
         </div>
         <div class="w-3/4 flex flex-col">
-            <div class="bg-gray-800 text-white p-2 flex justify-between items-center">
-                <span id="current-file" class="text-sm font-mono"></span>
-                <button onclick="saveFile()" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition duration-150 ease-in-out">
-                    <i class="fas fa-save mr-1"></i> Save
-                </button>
-            </div>
             <div id="editor" class="flex-grow"></div>
         </div>
     </main>
@@ -54,8 +54,8 @@
                 const li = document.createElement('li');
                 const icon = item.type === 'directory' ? 'fa-folder' : 'fa-file-code';
                 li.innerHTML = `
-                    <div class="flex items-center py-1 px-2 hover:bg-gray-100 rounded cursor-pointer">
-                        <i class="fas ${icon} mr-2 text-indigo-600"></i>
+                    <div class="flex items-center py-1 px-2 hover:bg-gray-600 rounded cursor-pointer">
+                        <i class="fas ${icon} mr-2 text-blue-400"></i>
                         <span>${item.name}</span>
                     </div>
                 `;
